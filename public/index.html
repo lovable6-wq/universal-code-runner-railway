@@ -1,0 +1,173 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020"><title>Universal Code Runner</title>
+<style>
+:root{--ink:#f5f7ff;--mute:#aab3d4;--ok:#5ef2b0;--bad:#ff6b81;--warn:#ffcf5c;--edge:rgba(255,255,255,.3);--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:#0b1020;color:var(--ink);font:15px/1.45 var(--font);-webkit-tap-highlight-color:transparent}
+.bg{position:fixed;inset:-10%;background:radial-gradient(45% 40% at 20% 20%,#3b6cff,transparent 65%),radial-gradient(40% 40% at 80% 25%,#b94dff,transparent 65%),radial-gradient(50% 50% at 55% 95%,#00cfc3,transparent 65%),#0b1020;animation:drift 40s ease-in-out infinite alternate}
+@keyframes drift{to{transform:scale(1.12) translate(-2%,2%)}}
+@media(prefers-reduced-motion:reduce){.bg{animation:none}*{transition:none!important}}
+.glass{background:linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.07));backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);border:1px solid var(--edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(255,255,255,.08),0 24px 60px rgba(0,0,0,.38)}
+.win{position:fixed;display:flex;flex-direction:column;border-radius:24px;min-width:320px;min-height:220px;resize:both;overflow:hidden}
+.win.min{display:none}
+.bar{display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:grab;touch-action:none;user-select:none;border-bottom:1px solid rgba(255,255,255,.12)}
+.bar b{flex:1;margin-left:6px;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:13px;height:13px;border-radius:50%;border:0;padding:0;box-shadow:inset 0 1px 1px rgba(255,255,255,.5)}
+.body{flex:1;overflow:auto;padding:14px}
+.dock{position:fixed;z-index:99999;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;padding:7px;border-radius:28px;max-width:calc(100vw - 24px);overflow-x:auto}
+.dock button{border:0;background:transparent;color:var(--ink);font:inherit;font-size:13px;padding:10px 16px;border-radius:20px;min-height:44px;white-space:nowrap;transition:background .2s}
+.dock button:hover,.dock button.on{background:rgba(255,255,255,.22)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.card{border-radius:20px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);display:flex;flex-direction:column;gap:10px}
+.head{display:flex;gap:12px;align-items:center}
+.av{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-weight:700;font-size:20px;object-fit:cover;flex:none}
+.head h3{margin:0;font-size:16px}.mute{color:var(--mute);font-size:13px}
+.st{display:flex;align-items:center;gap:7px;font-size:13px}.st i{width:9px;height:9px;border-radius:50%;flex:none}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;color:var(--mute)}.meta span b{color:var(--ink);font-weight:500}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.btn{border:1px solid var(--edge);background:rgba(255,255,255,.12);color:var(--ink);border-radius:13px;padding:8px 12px;font:inherit;font-size:13px;min-height:40px;transition:background .2s,transform .1s}
+.btn:hover{background:rgba(255,255,255,.24)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5}
+.btn.pri{background:linear-gradient(135deg,#4d7cff,#9b5cff);border-color:rgba(255,255,255,.45)}.btn.dng{color:#ffb3bd}
+.err{color:var(--bad);font-size:13px;margin:0}
+.in{width:100%;border:1px solid var(--edge);background:rgba(0,0,0,.22);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;min-height:42px}
+.row{display:flex;gap:10px;align-items:center;margin:6px 0}.row code{flex:1;font-family:var(--mono);font-size:13px;overflow:hidden;text-overflow:ellipsis}
+.log{margin:0;font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word}.log .err{font-size:12px}
+.stack{display:flex;flex-direction:column;gap:10px}
+h4{margin:14px 0 4px;font-size:14px}
+#login{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:20px}
+#login .box{width:min(380px,100%);border-radius:28px;padding:24px}
+#toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:100001;padding:10px 16px;border-radius:16px;max-width:92vw;display:none}
+@media(max-width:700px){
+ .win{inset:0!important;width:auto!important;height:auto!important;border-radius:0;resize:none;padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+ .win:not(.top){display:none}.bar{padding-top:calc(11px + env(safe-area-inset-top));cursor:default}
+ .dot{width:26px;height:26px}.dock{left:12px;right:12px;transform:none;justify-content:flex-start}
+ .grid{grid-template-columns:1fr}}
+</style></head><body><div class="bg"></div><nav id="dock" class="dock glass" aria-label="Aplicaciones"></nav><div id="toast" class="glass"></div>
+<script>
+const h=(t,p={},...k)=>{const e=document.createElement(t);for(const[a,v]of Object.entries(p)){if(a.startsWith('on'))e.addEventListener(a.slice(2),v);else if(a==='class')e.className=v;else e.setAttribute(a,v)}for(const c of k.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:document.createTextNode(c));return e};
+const api=async(p,o={})=>{const fd=o.body instanceof FormData;const r=await fetch('/api'+p,{...o,headers:o.body&&!fd?{'Content-Type':'application/json'}:{}});const j=await r.json().catch(()=>({}));if(r.status===401){login();throw new Error('401')}if(!r.ok)throw new Error(j.error||('Error '+r.status));return j};
+let tt;const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',6000)};
+const fail=e=>{if(e.message!=='401')toast(e.message)};
+
+/* ---- ventanas ---- */
+const wins=new Map();let z=10,n=0;
+function focus(w){for(const x of wins.values())x.el.classList.remove('top');w.el.classList.remove('min');w.el.classList.add('top');w.el.style.zIndex=++z;dock()}
+function openWin(id,title,render){let w=wins.get(id);if(w){focus(w);return}
+ const el=h('section',{class:'win glass'}),body=h('div',{class:'body'});w={el,title,clean:null};wins.set(id,w);
+ const close=h('button',{class:'dot',style:'background:#ff5f57','aria-label':'Cerrar',onclick:()=>{w.clean&&w.clean();el.remove();wins.delete(id);dock()}});
+ const min=h('button',{class:'dot',style:'background:#febc2e','aria-label':'Minimizar',onclick:()=>{el.classList.add('min');el.classList.remove('top');dock()}});
+ const bar=h('header',{class:'bar'},close,min,h('b',{},title));
+ bar.onpointerdown=e=>{if(e.target.closest('button')||innerWidth<=700)return;focus(w);const r=el.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;bar.setPointerCapture(e.pointerId);
+  bar.onpointermove=m=>{el.style.left=Math.max(0,Math.min(innerWidth-80,m.clientX-dx))+'px';el.style.top=Math.max(0,Math.min(innerHeight-60,m.clientY-dy))+'px'};bar.onpointerup=()=>bar.onpointermove=null};
+ el.onpointerdown=()=>{if(!el.classList.contains('top'))focus(w)};
+ el.style.cssText=`left:${70+n*32}px;top:${50+n*32}px;width:${Math.min(760,innerWidth-120)}px;height:${Math.min(520,innerHeight-160)}px`;n=(n+1)%8;
+ el.append(bar,body);document.body.append(el);w.clean=render(body)||null;focus(w)}
+function dock(){const d=document.getElementById('dock'),it=(l,f,on)=>h('button',{class:on?'on':'',onclick:f},l);
+ d.replaceChildren(it('Proyectos',()=>openWin('projects','Proyectos',projectsApp),wins.get('projects')?.el.classList.contains('top')),it('Subir',()=>openWin('upload','Subir proyecto',b=>uploadApp(b)),wins.get('upload')?.el.classList.contains('top')),it('Terminal',()=>openWin('trm-','Terminal',b=>termApp(b,null)),wins.get('trm-')?.el.classList.contains('top')),it('Monitor',()=>openWin('mon','Monitor',monitorApp),wins.get('mon')?.el.classList.contains('top')),
+  ...[...wins].filter(([k])=>!['projects','upload','trm-','mon'].includes(k)).map(([k,w])=>it(w.title.slice(0,16),()=>focus(w),w.el.classList.contains('top'))))}
+
+/* ---- proyectos ---- */
+const ST={running:['En ejecución','var(--ok)'],restarting:['Reiniciando…','var(--warn)'],exited:['Detenido','var(--mute)'],stopped:['Sin iniciar','var(--mute)'],created:['Creando','var(--warn)'],dead:['Caído','var(--bad)'],crashed:['Caído (error)','var(--bad)']};
+const up=s=>s<60?s+'s':s<3600?Math.floor(s/60)+'m':s<86400?Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m':Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h';
+function projectsApp(body){const list=h('div',{class:'grid'});body.append(list);
+ const load=async()=>{try{const ps=await api('/projects');list.replaceChildren(...(ps.length?ps.map(card):[h('p',{class:'mute'},'Todavía no hay proyectos. Abre “Subir” y elige un ZIP.')]))}catch(e){if(e.message!=='401')list.replaceChildren(h('p',{class:'err'},'No se pudo leer el backend: '+e.message))}};
+ const card=p=>{const [stl,col]=ST[p.state]||[p.state,'var(--mute)'],run=p.state==='running';
+  const act=(a,l,c)=>h('button',{class:'btn '+(c||''),onclick:async e=>{e.target.disabled=true;try{await api(`/projects/${p.id}/${a}`,{method:'POST'})}catch(x){fail(x)}load()}},l);
+  let conn=null;if(p.kind==='bot'){conn=p.discord&&p.discord.error?h('p',{class:'err'},p.discord.error):run?(p.gateway?'Conectado según los logs':'En ejecución, conexión sin confirmar en los logs'):null}
+  const av=p.discord&&p.discord.avatar?h('img',{class:'av',src:p.discord.avatar,alt:''}):h('div',{class:'av'},(p.name||'?')[0].toUpperCase());
+  return h('article',{class:'card'},
+   h('div',{class:'head'},av,h('div',{},h('h3',{},(p.discord&&p.discord.name)||p.name),h('div',{class:'mute'},[p.kind,p.lang,p.lib].filter(Boolean).join(' · ')+(p.discord&&p.discord.id?' · ID '+p.discord.id:'')))),
+   h('div',{class:'st'},h('i',{style:'background:'+col}),stl,typeof conn==='string'?h('span',{class:'mute'},'· '+conn):null),
+   conn&&typeof conn!=='string'?conn:null,
+   !run&&p.exitCode?h('p',{class:'err'},'Salió con código '+p.exitCode+'. Abre la consola para ver el error.'):null,
+   p.lastActivity?h('p',{class:'mute',style:'margin:0;font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},p.lastActivity):null,
+   h('div',{class:'meta'},h('span',{},'Tiempo activo ',h('b',{},run?up(p.uptime):'—')),h('span',{},'Reinicios ',h('b',{},p.restarts??'—')),h('span',{},'CPU ',h('b',{},p.res?p.res.cpu:'—')),h('span',{},'RAM ',h('b',{},p.res?p.res.mem:'—')),
+    p.port?h('span',{},'Puerto ',h('b',{},p.port)):null,p.commands&&p.commands.length?h('span',{},'Comandos ',h('b',{},p.commands.length)):null),
+   h('div',{class:'acts'},run?act('stop','Detener'):act('start','Iniciar','pri'),act('restart','Reiniciar'),act('reinstall','Reinstalar dependencias'),
+    h('button',{class:'btn',onclick:()=>openWin('fil-'+p.id,'Archivos · '+p.name,b=>filesApp(b,p))},'Archivos'),h('button',{class:'btn',onclick:()=>openWin('trm-'+p.id,'Terminal · '+p.name,b=>termApp(b,p.id))},'Terminal'),p.url&&run?h('button',{class:'btn',onclick:()=>openWin('pre-'+p.id,'Vista previa · '+p.name,b=>previewApp(b,p))},'Vista previa'):null,
+    h('button',{class:'btn',onclick:()=>openWin('log-'+p.id,'Consola · '+p.name,b=>consoleApp(b,p.id))},'Ver consola'),
+    h('button',{class:'btn',onclick:()=>openWin('var-'+p.id,'Variables · '+p.name,b=>varsApp(b,p))},'Variables y ajustes'),
+    h('button',{class:'btn',onclick:()=>openWin('ver-'+p.id,'Nueva versión · '+p.name,b=>uploadApp(b,p))},'Subir nueva versión'),
+    h('button',{class:'btn dng',onclick:async()=>{if(confirm('¿Eliminar “'+p.name+'” y sus archivos? No se puede deshacer.')){try{await api('/projects/'+p.id,{method:'DELETE'})}catch(x){fail(x)}load()}}},'Eliminar')))};
+ load();const t=setInterval(load,5000);return()=>clearInterval(t)}
+
+function uploadApp(body,p){const f=h('input',{type:'file',class:'in'}),nm=p?null:h('input',{class:'in',placeholder:'Nombre (opcional)',maxlength:'60'}),out=h('div',{class:'stack'});
+ const gi=p?null:h('input',{class:'in',placeholder:'…o URL de repositorio Git (https://github.com/usuario/repo)'}),go=h('button',{class:'btn pri',onclick:async()=>{if(gi&&gi.value.trim()&&!f.files[0]){go.disabled=true;go.textContent='Clonando…';try{const r=await api('/projects/git',{method:'POST',body:JSON.stringify({url:gi.value.trim(),name:nm&&nm.value})});shown(r)}catch(e){fail(e);out.replaceChildren(h('p',{class:'err'},e.message))}go.disabled=false;go.textContent='Subir y analizar';return}
+  if(!f.files[0])return toast('Elige un archivo ZIP');go.disabled=true;go.textContent='Subiendo y analizando…';
+  const fd=new FormData();fd.append('file',f.files[0]);if(nm&&nm.value)fd.append('name',nm.value);
+  try{const r=await api(p?`/projects/${p.id}/upload`:'/projects',{method:'POST',body:fd});shown(r)}
+  catch(e){fail(e);out.replaceChildren(h('p',{class:'err'},e.message))}go.disabled=false;go.textContent=p?'Subir nueva versión':'Subir y analizar'}},p?'Subir nueva versión':'Subir y analizar');
+ const shown=r=>{
+   out.replaceChildren(h('p',{},'Detectado: ',h('b',{},[r.kind,r.lang,r.lib].filter(Boolean).join(' · '))),r.cmd?h('p',{class:'mute'},'Se ejecutará con: '+r.cmd):h('p',{class:'err'},'No se reconoció el lenguaje. Define el comando en Ajustes.'),
+    h('button',{class:'btn pri',onclick:()=>openWin('var-'+r.id,'Variables · '+r.name,b=>varsApp(b,r))},r.kind==='bot'?'Configurar token y variables':'Configurar variables'))}
+ body.append(h('div',{class:'stack'},p?h('p',{class:'mute'},'Reemplaza los archivos. Tus variables se conservan. Reinicia el proyecto después.'):h('p',{class:'mute'},'Sube un ZIP (o un archivo suelto) con tu bot, servidor, juego web o script. Se analiza en el servidor.'),f,nm,gi,go,out))}
+
+function consoleApp(body,id){const pre=h('pre',{class:'log'});body.append(pre);
+ const ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws?id='+id);
+ ws.onmessage=e=>{const near=body.scrollHeight-body.scrollTop-body.clientHeight<90;pre.append(h('div',{class:/error|exception|traceback|fatal|panic/i.test(e.data)?'err':''},e.data));while(pre.childElementCount>1500)pre.firstChild.remove();if(near)body.scrollTop=body.scrollHeight};
+ ws.onclose=()=>pre.append(h('div',{class:'mute'},'— conexión de logs cerrada —'));return()=>ws.close()}
+
+function varsApp(body,p){const box=h('div',{class:'stack'});body.append(box);
+ const draw=async()=>{let e;try{e=await api(`/projects/${p.id}/env`)}catch(x){return fail(x)}
+  const k=h('input',{class:'in',placeholder:p.kind==='bot'?'DISCORD_TOKEN':'NOMBRE',autocapitalize:'off',autocomplete:'off',spellcheck:'false'}),v=h('input',{class:'in',type:'password',placeholder:'Valor',autocomplete:'new-password'});
+  const cmd=h('input',{class:'in',value:p.cmd||'',placeholder:'Comando de arranque'}),img=h('input',{class:'in',value:p.mem||'512m',placeholder:'Límite de RAM (512m, 1g)'}),pub=h('input',{type:'checkbox'}),port=h('input',{class:'in',type:'number',value:p.port||'',placeholder:'Puerto (solo servidores)'}),rs=h('input',{type:'checkbox'});rs.checked=p.restart!==false;pub.checked=!!p.public;
+  box.replaceChildren(h('h4',{},'Variables privadas'),h('p',{class:'mute'},'Se guardan cifradas y nunca se muestran completas. Se aplican al iniciar o reiniciar.'),
+   ...(e.vars.length?e.vars.map(x=>h('div',{class:'row'},h('code',{},x.key),h('span',{class:'mute'},x.mask),h('button',{class:'btn dng',onclick:async()=>{try{await api(`/projects/${p.id}/env`,{method:'PUT',body:JSON.stringify({remove:[x.key]})})}catch(z){fail(z)}draw()}},'Quitar'))):[h('p',{class:'mute'},'Sin variables todavía.')]),
+   k,v,h('button',{class:'btn pri',onclick:async()=>{try{await api(`/projects/${p.id}/env`,{method:'PUT',body:JSON.stringify({set:{[k.value.trim()]:v.value}})});toast('Variable guardada')}catch(z){fail(z)}draw()}},'Guardar variable'),
+   h('h4',{},'Ajustes de ejecución'),cmd,img,port,h('label',{class:'row'},rs,'Reiniciar automáticamente si se cae'),h('label',{class:'row'},pub,'Vista web pública (sin login) en /p/'+p.id+'/'),
+   h('button',{class:'btn',onclick:async()=>{try{await api(`/projects/${p.id}/config`,{method:'PUT',body:JSON.stringify({cmd:cmd.value,mem:img.value,port:port.value,restart:rs.checked,public:pub.checked})});toast('Ajustes guardados')}catch(z){fail(z)}}},'Guardar ajustes'))};
+ draw()}
+
+
+/* ---- librerías CDN bajo demanda ---- */
+const libs={};const load=(u,css)=>libs[u]||(libs[u]=new Promise((ok,ko)=>{const e=document.createElement(css?'link':'script');if(css)e.rel='stylesheet',e.href=u;else e.src=u;e.onload=ok;e.onerror=()=>ko(new Error('No se pudo cargar '+u));document.head.append(e)}));
+const J='https://cdn.jsdelivr.net/npm/';
+
+/* ---- terminal real (xterm.js + PTY en el servidor) ---- */
+function termApp(body,id){body.style.cssText='padding:6px;display:flex;flex-direction:column;gap:6px';const box=h('div',{style:'flex:1;min-height:0'});
+ const keys=h('div',{class:'acts'},...[['Ctrl+C','\x03'],['Tab','\t'],['↑','\x1b[A'],['↓','\x1b[B'],['Esc','\x1b']].map(([l,k])=>h('button',{class:'btn',onclick:()=>ws&&ws.readyState===1&&ws.send(k)},l)));body.append(box,keys);let ws,t,ro;
+ Promise.all([load(J+'xterm@5.3.0/css/xterm.css',1),load(J+'xterm@5.3.0/lib/xterm.js')]).then(()=>load(J+'xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js')).then(()=>{
+  t=new Terminal({fontSize:13,cursorBlink:true,fontFamily:'ui-monospace,Menlo,monospace',theme:{background:'#0000'},allowTransparency:true});const fit=new FitAddon.FitAddon();t.loadAddon(fit);t.open(box);fit.fit();
+  ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/term'+(id?'?id='+id:''));ws.onmessage=e=>t.write(e.data);ws.onclose=()=>t.write('\r\n— terminal cerrada —\r\n');t.onData(d=>ws.readyState===1&&ws.send(d));
+  ro=new ResizeObserver(()=>{try{fit.fit()}catch{}});ro.observe(box)}).catch(e=>box.append(h('p',{class:'err'},e.message)));
+ return()=>{ro&&ro.disconnect();ws&&ws.close();t&&t.dispose()}}
+
+/* ---- explorador + Monaco + hex + desensamblador ---- */
+function filesApp(body,p){body.style.cssText='padding:8px;display:flex;flex-direction:column;gap:8px';let dir='',cur=null,ed=null;
+ const path=h('div',{class:'mute'}),list=h('div',{class:'stack',style:'max-height:30%;overflow:auto'}),bar=h('div',{class:'acts'}),pane=h('div',{style:'flex:1;min-height:160px;border-radius:12px;overflow:hidden;background:rgba(0,0,0,.25)'});body.append(path,list,bar,pane);
+ const j=p_=>p_?dir?dir+'/'+p_:p_:dir;
+ const ls=async()=>{path.textContent='/'+dir;try{const r=await api(`/projects/${p.id}/files?path=${encodeURIComponent(dir)}`);
+  list.replaceChildren(...(dir?[h('button',{class:'btn',onclick:()=>{dir=dir.split('/').slice(0,-1).join('/');ls()}},'⬆ ..')]:[]),...r.files.map(f=>h('button',{class:'btn',style:'text-align:left',onclick:()=>f.dir?(dir=j(f.name),ls()):open(j(f.name))},(f.dir?'📁 ':'📄 ')+f.name+(f.dir?'':'  · '+f.size+' B'))))}catch(e){fail(e)}};
+ const open=async f=>{cur=f;bar.replaceChildren(h('b',{},f),h('button',{class:'btn pri',onclick:save},'Guardar'),h('button',{class:'btn',onclick:()=>bin(f,'hex')},'Hex'),h('button',{class:'btn',onclick:()=>bin(f,'disasm')},'Desensamblar'));
+  try{const r=await api(`/projects/${p.id}/file?path=${encodeURIComponent(f)}`);await mon();pane.replaceChildren();ed&&ed.dispose();ed=monaco.editor.create(pane,{value:r.text,language:lang(f),theme:'vs-dark',automaticLayout:true,minimap:{enabled:false},fontSize:13})}
+  catch(e){pane.replaceChildren(h('p',{class:'err',style:'padding:10px'},e.message))}};
+ const save=async()=>{try{await api(`/projects/${p.id}/file`,{method:'PUT',body:JSON.stringify({path:cur,text:ed.getValue()})});toast('Guardado. Reinicia el proyecto para aplicar cambios.')}catch(e){fail(e)}};
+ const bin=async(f,k,off=0)=>{try{const r=await api(`/projects/${p.id}/${k}?path=${encodeURIComponent(f)}&offset=${off}`);ed&&(ed.dispose(),ed=null);
+  pane.replaceChildren(h('div',{style:'height:100%;overflow:auto;padding:8px'},k==='hex'?h('div',{class:'acts'},h('button',{class:'btn',onclick:()=>bin(f,k,Math.max(0,off-2048))},'◀'),h('span',{class:'mute'},`${off}–${off+r.read} de ${r.size} B`),h('button',{class:'btn',onclick:()=>bin(f,k,off+2048)},'▶')):null,h('pre',{class:'log'},r.text)))}catch(e){fail(e)}};
+ const lang=f=>({js:'javascript',ts:'typescript',py:'python',json:'json',md:'markdown',html:'html',css:'css',go:'go',rs:'rust',java:'java',cs:'csharp',php:'php',rb:'ruby',lua:'lua',sh:'shell',c:'c',cpp:'cpp',yml:'yaml',yaml:'yaml',toml:'ini',xml:'xml',sql:'sql'})[f.split('.').pop()]||'plaintext';
+ const mon=()=>window.monaco?Promise.resolve():load(J+'monaco-editor@0.45.0/min/vs/loader.js').then(()=>new Promise(ok=>{window.MonacoEnvironment={getWorkerUrl:()=>URL.createObjectURL(new Blob([`self.MonacoEnvironment={baseUrl:'${J}monaco-editor@0.45.0/min/'};importScripts('${J}monaco-editor@0.45.0/min/vs/base/worker/workerMain.js')`],{type:'text/javascript'}))};require.config({paths:{vs:J+'monaco-editor@0.45.0/min/vs'}});require(['vs/editor/editor.main'],ok)}));
+ ls();return()=>ed&&ed.dispose()}
+
+/* ---- vista previa a pantalla completa ---- */
+function previewApp(body,p){body.style.cssText='padding:0;display:flex;flex-direction:column';const fr=h('iframe',{src:p.url,style:'flex:1;border:0;background:#fff',allow:'fullscreen'});
+ body.append(h('div',{class:'acts',style:'padding:8px'},h('button',{class:'btn',onclick:()=>fr.src=fr.src},'Recargar'),h('a',{class:'btn',href:p.url,target:'_blank',style:'text-decoration:none'},'Abrir en pestaña nueva'),h('button',{class:'btn',onclick:()=>fr.requestFullscreen&&fr.requestFullscreen()},'Pantalla completa')),fr)}
+
+/* ---- monitor de recursos ---- */
+function monitorApp(body){const box=h('div',{class:'stack'});body.append(box);const mb=x=>(x/1048576).toFixed(0)+' MiB',bar=(v,t)=>h('div',{style:'height:8px;border-radius:6px;background:rgba(255,255,255,.15);overflow:hidden'},h('i',{style:`display:block;height:100%;width:${Math.min(100,v/t*100)}%;background:linear-gradient(90deg,#4d7cff,#9b5cff)`}));
+ const tick=async()=>{try{const r=await api('/system'),ps=await api('/projects');box.replaceChildren(
+  h('div',{class:'card'},h('b',{},'Servidor'),h('div',{class:'mute'},`Node ${r.node} · ${r.cpus} CPU · carga ${r.load.map(x=>x.toFixed(2)).join(' / ')} · activo ${up(r.uptime)}`),h('div',{},'RAM '+mb(r.memUsed)+' / '+mb(r.memTotal)),bar(r.memUsed,r.memTotal),r.diskTotal?h('div',{},'Disco '+mb(r.diskUsed)+' / '+mb(r.diskTotal)):null,r.diskTotal?bar(r.diskUsed,r.diskTotal):null,
+   r.volume?null:h('p',{class:'err'},'Sin volumen persistente: los datos se pierden al redesplegar (Railway → Volume en /data).'),r.root?null:h('p',{class:'err'},'No corre como root: sin aislamiento por usuario.'),r.url?h('div',{class:'mute'},'URL pública: '+r.url):null),
+  ...ps.map(x=>h('div',{class:'card'},h('b',{},x.name),h('div',{class:'mute'},(ST[x.state]||[x.state])[0]+' · CPU '+(x.res?x.res.cpu:'—')+' · RAM '+(x.res?x.res.mem:'—')+' (límite '+x.mem+')'))))}catch(e){fail(e)}};
+ tick();const t=setInterval(tick,4000);return()=>clearInterval(t)}
+
+/* ---- acceso ---- */
+function login(msg){if(document.getElementById('login'))return;
+ const i=h('input',{class:'in',type:'password',placeholder:'Token de administrador',autocomplete:'current-password'}),m=h('p',{class:'err'},msg||''),
+ go=async()=>{try{await api('/login',{method:'POST',body:JSON.stringify({token:i.value})});ov.remove();boot()}catch(e){m.textContent=e.message==='401'?'Token incorrecto':e.message}};
+ i.onkeydown=e=>e.key==='Enter'&&go();
+ const ov=h('div',{id:'login'},h('div',{class:'box glass stack'},h('h2',{style:'margin:0'},'Universal Code Runner'),h('p',{class:'mute',style:'margin:0'},'Introduce el token de administrador de tu servidor.'),i,m,h('button',{class:'btn pri',onclick:go},'Entrar')));
+ document.body.append(ov);i.focus()}
+function boot(){for(const w of wins.values()){w.clean&&w.clean();w.el.remove()}wins.clear();dock();openWin('projects','Proyectos',projectsApp)}
+dock();api('/projects').then(boot).catch(e=>e.message!=='401'&&login('No se pudo conectar: '+e.message));
+</script></body></html>
