@@ -202,7 +202,7 @@ srv.on('upgrade',(q,sock,head)=>{const u=new URL(q.url,'http://x'),id=u.searchPa
   return wss.handleUpgrade(q,sock,head,async ws=>{
    const cwd=m?sdir(m.id):path.join(DATA,'workspace');fs.mkdirSync(cwd,{recursive:true});const uid=m?uidOf(m.id):uidOf('00000000');if(ROOT){await own(m?m.id:'00000000',m?pdir(m.id):cwd);if(!m)await own('00000000',cwd)}
    const home=path.join(cwd,'.home');fs.mkdirSync(home,{recursive:true});if(ROOT)await own(m?m.id:'00000000',home);
-   const env={HOME:home,TERM:'xterm-256color',PATH:process.env.PATH,LANG:'C.UTF-8',...(m?(m.env||{}):{})};const o={cwd,env,detached:true};if(ROOT)o.uid=o.gid=uid;
+   const env={HOME:home,TERM:'xterm-256color',PATH:path.join(home,'.local','bin')+':'+process.env.PATH,LANG:'C.UTF-8',PIP_BREAK_SYSTEM_PACKAGES:'1',PIP_USER:'1',PIP_NO_CACHE_DIR:'1',...(m?(m.env||{}):{})};const o={cwd,env,detached:true};if(ROOT)o.uid=o.gid=uid;
    const p=spawn('script',['-qfec','/bin/bash -i','/dev/null'],o);p.stdout.on('data',d=>ws.readyState===1&&ws.send(d.toString('utf8')));p.stderr.on('data',d=>ws.readyState===1&&ws.send(d.toString('utf8')));
    p.on('error',e=>{ws.send('No se pudo abrir la terminal: '+e.message);ws.close()});p.on('close',()=>ws.close());
    ws.on('message',d=>{try{p.stdin.write(d.toString())}catch{}});ws.on('close',()=>{try{process.kill(-p.pid,'SIGKILL')}catch{}})})}
