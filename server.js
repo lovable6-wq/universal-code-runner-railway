@@ -34,13 +34,14 @@ const hasBin=async b=>(await sh('command -v '+b)).ok;
 const pickPort=()=>{const used=new Set(allMeta().map(m=>m.port));let p;do p=20000+Math.floor(Math.random()*20000);while(used.has(p));return p};
 
 function extract(buf,dest){
- const es=new AdmZip(buf).getEntries();let total=0;
+ let es;try{es=new AdmZip(buf).getEntries()}catch(e){throw new Error('El archivo no es un ZIP válido o está dañado: '+e.message)}
+ es=es.filter(e=>!/(^|\/)(node_modules|__MACOSX)(\/|$)/.test(e.entryName.replace(/\\/g,'/')));let total=0;
  if(es.length>20000)throw new Error('El ZIP tiene demasiados archivos');
  fs.rmSync(dest,{recursive:true,force:true});fs.mkdirSync(dest,{recursive:true});
  for(const e of es){total+=e.header.size;if(total>1e9)throw new Error('El ZIP descomprimido supera 1 GB');
   const t=path.resolve(dest,e.entryName);if(t!==dest&&!t.startsWith(dest+path.sep))throw new Error('Ruta insegura dentro del ZIP');
   if(e.isDirectory){fs.mkdirSync(t,{recursive:true});continue}
-  fs.mkdirSync(path.dirname(t),{recursive:true});fs.writeFileSync(t,e.getData())}
+  fs.mkdirSync(path.dirname(t),{recursive:true});fs.writeFileSync(t,e.getData());const md=(e.attr>>>16)&0o777;if(md&0o111)try{fs.chmodSync(t,md)}catch{}}
  fs.rmSync(path.join(dest,'__MACOSX'),{recursive:true,force:true});
  const top=fs.readdirSync(dest);
  if(top.length===1&&fs.statSync(path.join(dest,top[0])).isDirectory()){const inn=path.join(dest,top[0]);for(const n of fs.readdirSync(inn))fs.renameSync(path.join(inn,n),path.join(dest,n));fs.rmdirSync(inn)}
@@ -131,26 +132,28 @@ app.use('/p/:id',(q,s)=>{const t=target({url:q.originalUrl});if(!t)return s.stat
  r.on('error',e=>s.status(502).send('El proyecto no responde en el puerto '+t.pr.port+': '+e.message));q.pipe(r)});
 
 app.use('/api',(q,s,n)=>authed(q)?n():s.status(401).json({error:'No autorizado'}));
-const up=multer({storage:multer.memoryStorage(),limits:{fileSize:200e6}});
+const UPT=path.join(DATA,'.uploads');fs.mkdirSync(UPT,{recursive:true});for(const f of fs.readdirSync(UPT))fs.rmSync(path.join(UPT,f),{force:true});
+const up=multer({storage:multer.diskStorage({destination:UPT}),limits:{fileSize:200e6}});
+const rmUp=q=>{if(q.file&&q.file.path)fs.rm(q.file.path,{force:true},()=>{})};
 const json=express.json({limit:'6mb'});
-const wrap=f=>(q,s)=>Promise.resolve().then(()=>f(q,s)).catch(e=>s.status(400).json({error:e.message}));
+const wrap=f=>(q,s)=>Promise.resolve().then(()=>f(q,s)).catch(e=>s.status(400).json({error:e.message})).finally(()=>rmUp(q));
 const P=q=>{const m=getMeta(q.params.id);if(!m)throw new Error('Proyecto no encontrado');return m};
 const applyDetect=(m,d)=>{Object.assign(m,{lang:d.lang,lib:d.lib,kind:d.kind,commands:d.commands});if(!m.custom){m.cmd=d.cmd;m.env=d.env;m.need=d.need}if(d.port&&!m.port)m.port=pickPort()};
 async function create(name,d0){const id=crypto.randomBytes(4).toString('hex');fs.mkdirSync(pdir(id),{recursive:true});return id}
 async function finish(id,name,source){await own(id,pdir(id));const d=detect(sdir(id));
- const m={id,name:String(name||d.name||'proyecto').slice(0,60),source,createdAt:new Date().toISOString(),restart:true,mem:'512m',cpu:1,port:null,vars:seal({}),desired:'stopped',restarts:0};applyDetect(m,d);saveMeta(m);return view(m)}
+ const m={id,name:String(name||d.name||'proyecto').slice(0,60),source,createdAt:new Date().toISOString(),restart:true,mem:'768m',cpu:1,port:null,vars:seal({}),desired:'stopped',restarts:0};applyDetect(m,d);saveMeta(m);return view(m)}
 
 app.get('/api/projects',wrap(async(q,s)=>s.json(await Promise.all(allMeta().map(view)))));
 app.post('/api/projects',up.single('file'),wrap(async(q,s)=>{if(!q.file)throw new Error('Falta el archivo');
  const id=await create(),nm=q.file.originalname;
- try{if(/\.zip$/i.test(nm))extract(q.file.buffer,sdir(id));else{fs.mkdirSync(sdir(id),{recursive:true});fs.writeFileSync(path.join(sdir(id),path.basename(nm)),q.file.buffer)}}catch(e){fs.rmSync(pdir(id),{recursive:true,force:true});throw e}
+ try{if(/\.zip$/i.test(nm))extract(q.file.path,sdir(id));else{fs.mkdirSync(sdir(id),{recursive:true});fs.copyFileSync(q.file.path,path.join(sdir(id),path.basename(nm)))}}catch(e){fs.rmSync(pdir(id),{recursive:true,force:true});throw e}
  s.json(await finish(id,q.body.name||nm.replace(/\.[^.]+$/,''),'zip'))}));
 app.post('/api/projects/git',json,wrap(async(q,s)=>{const u=String(q.body.url||'').trim();if(!/^https:\/\/[\w.-]+\/[\w.\/~-]+$/.test(u))throw new Error('URL de Git inválida (solo https)');
  const id=await create();const r=await sh(`git clone --depth 1 -- ${JSON.stringify(u)} ${JSON.stringify(sdir(id))}`,{timeout:300000,env:{...process.env,GIT_TERMINAL_PROMPT:'0'}});
  if(!r.ok){fs.rmSync(pdir(id),{recursive:true,force:true});throw new Error('git clone falló: '+r.err.slice(-300))}
  fs.rmSync(path.join(sdir(id),'.git'),{recursive:true,force:true});s.json(await finish(id,q.body.name||u.split('/').pop().replace(/\.git$/,''),'git'))}));
 app.post('/api/projects/:id/upload',up.single('file'),wrap(async(q,s)=>{const m=P(q);if(!q.file)throw new Error('Falta el archivo ZIP');
- await stop(m);extract(q.file.buffer,sdir(m.id));await own(m.id,pdir(m.id));applyDetect(m,detect(sdir(m.id)));saveMeta(m);s.json(await view(m))}));
+ await stop(m);extract(q.file.path,sdir(m.id));await own(m.id,pdir(m.id));applyDetect(m,detect(sdir(m.id)));saveMeta(m);s.json(await view(m))}));
 app.get('/api/system',wrap(async(q,s)=>{const rd=f=>{try{return fs.readFileSync(f,'utf8').trim()}catch{return null}},cm=rd('/sys/fs/cgroup/memory.max'),cc=rd('/sys/fs/cgroup/memory.current');
  const df=await sh(`df -Pk ${JSON.stringify(DATA)} | tail -1`),d=df.out.split(/\s+/);
  s.json({cpus:os.cpus().length,load:os.loadavg(),memTotal:cm&&cm!=='max'?+cm:os.totalmem(),memUsed:cc?+cc:os.totalmem()-os.freemem(),diskTotal:+d[1]*1024||null,diskUsed:+d[2]*1024||null,uptime:Math.floor(process.uptime()),node:process.version,root:ROOT,volume:!!process.env.RAILWAY_VOLUME_MOUNT_PATH||DATA!==path.resolve('./data'),url:publicUrl()})}));
@@ -185,6 +188,8 @@ app.get('/api/projects/:id/disasm',wrap(async(q,s)=>{const m=P(q),f=safe(m,q.que
  if(!r.out)r=await sh(`objdump -D -b binary -m i386:x86-64 -M intel ${JSON.stringify(f)} | head -n 600`);
  if(!r.out)throw new Error('objdump no pudo desensamblar este archivo: '+r.err.slice(0,200));s.json({text:r.out})}));
 
+app.use('/api',(e,q,s,n)=>{const big=e&&e.code==='LIMIT_FILE_SIZE';s.status(big?413:(e.status||400)).json({error:big?'El archivo supera 200 MB':(e.message||'Error')})});
+
 // ---------- servidor, WebSockets (logs + terminal real + proxy WS) ----------
 const srv=http.createServer(app),wss=new WebSocketServer({noServer:true});
 function publicUrl(){const d=process.env.RAILWAY_PUBLIC_DOMAIN||process.env.RAILWAY_STATIC_URL;return d?'https://'+d.replace(/^https?:\/\//,''):null}
@@ -197,7 +202,7 @@ srv.on('upgrade',(q,sock,head)=>{const u=new URL(q.url,'http://x'),id=u.searchPa
   return wss.handleUpgrade(q,sock,head,async ws=>{
    const cwd=m?sdir(m.id):path.join(DATA,'workspace');fs.mkdirSync(cwd,{recursive:true});const uid=m?uidOf(m.id):uidOf('00000000');if(ROOT){await own(m?m.id:'00000000',m?pdir(m.id):cwd);if(!m)await own('00000000',cwd)}
    const home=path.join(cwd,'.home');fs.mkdirSync(home,{recursive:true});if(ROOT)await own(m?m.id:'00000000',home);
-   const env={HOME:home,TERM:'xterm-256color',PATH:process.env.PATH,LANG:'C.UTF-8',...(m?(m.env||{}):{})};const o={cwd,env,detached:true};if(ROOT)o.uid=o.gid=uid;
+   const env={HOME:home,TERM:'xterm-256color',PATH:path.join(home,'.local','bin')+':'+process.env.PATH,LANG:'C.UTF-8',PIP_BREAK_SYSTEM_PACKAGES:'1',PIP_USER:'1',PIP_NO_CACHE_DIR:'1',...(m?(m.env||{}):{})};const o={cwd,env,detached:true};if(ROOT)o.uid=o.gid=uid;
    const p=spawn('script',['-qfec','/bin/bash -i','/dev/null'],o);p.stdout.on('data',d=>ws.readyState===1&&ws.send(d.toString('utf8')));p.stderr.on('data',d=>ws.readyState===1&&ws.send(d.toString('utf8')));
    p.on('error',e=>{ws.send('No se pudo abrir la terminal: '+e.message);ws.close()});p.on('close',()=>ws.close());
    ws.on('message',d=>{try{p.stdin.write(d.toString())}catch{}});ws.on('close',()=>{try{process.kill(-p.pid,'SIGKILL')}catch{}})})}
